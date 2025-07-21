@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Movie & Web Series Recommender</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark Gray */
+            overflow-x: hidden;
+            position: relative;
+        }
+        /* Floating particles background */
+        #particles-js {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+        }
+        /* Glassmorphism effect */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5); /* Slate 800 with 50% opacity */
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(55, 65, 81, 0.2); /* Gray 700 with 20% opacity */
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; } /* Dark Gray */
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; } /* Gray 600 */
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; } /* Gray 500 */
+        
+        .poster-img {
+            width: 100%;
+            height: 380px;
+            object-fit: cover;
+            object-position: center;
+        }
+        /* Card animations */
+        .card {
+            opacity: 0;
+            transform: translateY(30px) scale(0.98);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+            perspective: 1000px;
+        }
+        .card.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .card:hover .card-inner {
+            transform: rotateY(5deg) rotateX(2deg) scale(1.03);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+        }
+        .card-inner {
+            transition: transform 0.4s ease;
+            transform-style: preserve-3d;
+        }
+
+        .genre-checkbox:checked + label {
+            background-color: #f9fafb; /* Gray 50 */
+            border-color: #f9fafb;
+            color: #111827; /* Gray 900 */
+        }
+        .file-input-label {
+            cursor: pointer;
+            border: 2px dashed #4b5563;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        .file-input-label:hover {
+            background-color: #1f293b;
+            border-color: #6b7280;
+        }
+        .tab-link, .movie-type-btn {
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+        }
+        .tab-link.active {
+            border-bottom-color: #f9fafb; /* Gray 50 */
+            color: #f9fafb;
+        }
+        .movie-type-btn.active {
+            background-color: #f9fafb; /* Gray 50 */
+            color: #111827;
+        }
+        /* Skeleton Loader */
+        .skeleton-card {
+            border-radius: 1rem;
+            overflow: hidden;
+            background-color: rgba(30, 41, 59, 0.8);
+        }
+        .skeleton-img {
+            height: 380px;
+            background-color: #374151;
+        }
+        .skeleton-text {
+            height: 1.25rem;
+            background-color: #374151;
+            border-radius: 0.25rem;
+        }
+        .skeleton-button {
+            height: 2.5rem;
+            background-color: #374151;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div id="particles-js"></div>
+    <div class="content-wrapper">
+        <div class="container mx-auto px-4 py-8 md:py-12">
+            <header class="text-center mb-12">
+                <h1 class="text-5xl md:text-6xl font-extrabold text-white mb-3 tracking-tight">AI Recommendation Engine</h1>
+                <p class="text-lg text-slate-300">Discover Movies & Web Series with AI.</p>
+            </header>
+
+            <div class="max-w-3xl mx-auto mb-12 glass-card p-8 rounded-2xl shadow-2xl">
+                <div class="mb-6">
+                     <label class="block text-lg font-medium mb-2 text-center text-slate-300">Choose your entertainment world:</label>
+                     <div class="flex justify-center gap-2 p-1 bg-gray-900/50 rounded-lg">
+                        <button id="type-hollywood" class="movie-type-btn active w-1/2 py-2 font-semibold rounded-md text-gray-400">Hollywood</button>
+                        <button id="type-bollywood" class="movie-type-btn w-1/2 py-2 font-semibold rounded-md text-gray-400">Bollywood</button>
+                     </div>
+                </div>
+
+                <div class="flex border-b border-slate-700 mb-6">
+                    <button id="tab-by-movie" class="tab-link active flex-1 py-3 px-4 font-semibold border-b-2 border-transparent text-slate-300">Recommend from Title/Poster</button>
+                    <button id="tab-by-genre" class="tab-link flex-1 py-3 px-4 font-semibold border-b-2 border-transparent text-slate-300">Discover by Genre</button>
+                </div>
+
+                <div id="section-by-movie">
+                    <div class="mb-4">
+                        <label for="movieInput" class="block text-lg font-medium mb-2 text-slate-300">Enter a title you like:</label>
+                        <input type="text" id="movieInput" placeholder="e.g., The Dark Knight, Panchayat..." class="w-full p-3 bg-slate-800 border-2 border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-300 text-lg text-white">
+                    </div>
+                    <button id="recommendBtn" class="w-full bg-gray-50 hover:bg-white text-gray-900 font-bold py-3 px-6 rounded-lg transition-all duration-300 text-lg flex items-center justify-center mb-4 transform hover:scale-105">
+                        Get AI Recommendations
+                    </button>
+                    <div class="text-center my-4 text-slate-400">OR</div>
+                    <div>
+                        <label for="posterUpload" class="block text-lg font-medium mb-2 text-slate-300">Upload a poster:</label>
+                        <label for="posterUpload" class="file-input-label w-full rounded-lg flex flex-col items-center justify-center text-slate-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-500"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <span id="file-name" class="mt-2">Click to upload an image</span>
+                        </label>
+                        <input type="file" id="posterUpload" class="hidden" accept="image/*">
+                        <img id="poster-preview" class="mt-4 rounded-lg max-h-64 mx-auto hidden" alt="Poster Preview"/>
+                         <button id="recommendFromPosterBtn" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 text-lg flex items-center justify-center mt-4 transform hover:scale-105" disabled>
+                            Recommend from Poster
+                        </button>
+                    </div>
+                </div>
+
+                <div id="section-by-genre" class="hidden">
+                    <div class="mb-6">
+                        <label class="block text-lg font-medium mb-2 text-slate-300">Select one or more genres:</label>
+                        <div id="genre-options" class="flex flex-wrap gap-2"></div>
+                    </div>
+                    <button id="genreRecommendBtn" class="w-full bg-gray-50 hover:bg-white text-gray-900 font-bold py-3 px-6 rounded-lg transition-all duration-300 text-lg flex items-center justify-center transform hover:scale-105">
+                        Discover by Genre
+                    </button>
+                </div>
+            </div>
+
+            <div id="status" class="text-center text-slate-300 text-xl my-10">
+                Choose a recommendation method to begin.
+            </div>
+            
+            <div id="results" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8"></div>
+            
+            <div id="load-more-container" class="text-center mt-12 hidden">
+                 <button id="loadMoreBtn" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-8 rounded-lg transition-all duration-300 text-lg transform hover:scale-105">
+                    Load More
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script>
+        // --- Particle.js Background Animation ---
+        particlesJS('particles-js', {
+          "particles": {
+            "number": { "value": 40, "density": { "enable": true, "value_area": 800 } },
+            "color": { "value": "#ffffff" },
+            "shape": { "type": "circle" },
+            "opacity": { "value": 0.2, "random": true, "anim": { "enable": true, "speed": 1, "opacity_min": 0.05, "sync": false } },
+            "size": { "value": 2, "random": true },
+            "line_linked": { "enable": false },
+            "move": { "enable": true, "speed": 1, "direction": "none", "random": true, "straight": false, "out_mode": "out" }
+          },
+          "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": false }, "onclick": { "enable": false } } },
+          "retina_detect": true
+        });
+
+        // --- DOM ELEMENTS ---
+        const movieInput = document.getElementById('movieInput');
+        const recommendBtn = document.getElementById('recommendBtn');
+        const posterUpload = document.getElementById('posterUpload');
+        const posterPreview = document.getElementById('poster-preview');
+        const fileNameSpan = document.getElementById('file-name');
+        const recommendFromPosterBtn = document.getElementById('recommendFromPosterBtn');
+        const genreRecommendBtn = document.getElementById('genreRecommendBtn');
+        const resultsContainer = document.getElementById('results');
+        const statusDiv = document.getElementById('status');
+        const genreOptionsContainer = document.getElementById('genre-options');
+        const tabByMovie = document.getElementById('tab-by-movie');
+        const tabByGenre = document.getElementById('tab-by-genre');
+        const sectionByMovie = document.getElementById('section-by-movie');
+        const sectionByGenre = document.getElementById('section-by-genre');
+        const typeHollywoodBtn = document.getElementById('type-hollywood');
+        const typeBollywoodBtn = document.getElementById('type-bollywood');
+        const loadMoreContainer = document.getElementById('load-more-container');
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+
+        // --- GLOBAL STATE ---
+        let uploadedFile = null;
+        let movieType = 'Hollywood';
+        let lastQueryContext = null;
+
+        // --- GENRE DATA ---
+        const genres = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Drama", "Family", "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction", "Thriller", "War", "Western"];
+
+        // --- INITIALIZATION ---
+        function initialize() {
+            genres.forEach(genre => {
+                const checkboxId = `genre-${genre.replace(/\s/g, '')}`;
+                const checkboxHtml = `
+                    <div>
+                        <input type="checkbox" id="${checkboxId}" value="${genre}" class="hidden genre-checkbox">
+                        <label for="${checkboxId}" class="px-3 py-1 border-2 border-slate-600 rounded-full cursor-pointer transition-colors hover:bg-slate-700 text-slate-300">
+                            ${genre}
+                        </label>
+                    </div>
+                `;
+                genreOptionsContainer.innerHTML += checkboxHtml;
+            });
+        }
+
+        // --- UI CONTROL LOGIC ---
+        function setMovieType(type) {
+            movieType = type;
+            typeHollywoodBtn.classList.toggle('active', type === 'Hollywood');
+            typeBollywoodBtn.classList.toggle('active', type === 'Bollywood');
+        }
+
+        function switchToTab(tabName) {
+            sectionByMovie.style.display = tabName === 'movie' ? 'block' : 'none';
+            sectionByGenre.style.display = tabName === 'genre' ? 'block' : 'none';
+            tabByMovie.classList.toggle('active', tabName === 'movie');
+            tabByGenre.classList.toggle('active', tabName === 'genre');
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                uploadedFile = file;
+                fileNameSpan.textContent = file.name;
+                posterPreview.classList.remove('hidden');
+                posterPreview.src = URL.createObjectURL(file);
+                recommendFromPosterBtn.disabled = false;
+            }
+        }
+
+        // --- AI PROMPT ENGINEERING ---
+        function getMovieTypeInstruction() {
+            return movieType === 'Hollywood' 
+                ? "**Important: Only recommend English-language, non-Indian movies or web series. Do not include any Bollywood or Hindi-language content.**"
+                : "**Important: Only recommend Bollywood (Hindi-language) movies or web series from India.**";
+        }
+
+        function getPosterInstruction() {
+            return "For each item's poster, you MUST attempt to provide poster information in this order of priority: 1. **poster_path**: The specific poster path from The Movie Database (TMDB). This is a string that starts with a '/' and ends with '.jpg' (e.g., '/qJ2tW6WMUDux911r6m7haRef0WH.jpg'). 2. **poster_url**: If and only if a TMDB path is not found, provide a full, direct, and publicly accessible URL to a high-quality poster image from another reliable source like IMDb. You should provide at least one of these fields for every item.";
+        }
+
+        function getLinkInstruction() {
+            if (movieType === 'Bollywood') {
+                return "For each item, you MUST provide a `google_link`, which is a Google search for the movie's title. **Do not provide IMDb or TMDB links for Bollywood content.**";
+            }
+            return "For each item, you MUST provide as many of the following links as you can find: `imdb_link`, `tmdb_link`, and `google_link`. The Google link should be a search for the movie's title. It is okay if some links are null, but provide all that you find."
+        }
+        
+        // --- AI RECOMMENDATION LOGIC ---
+        function buildPrompt(context, isLoadMore = false) {
+            const movieTypeInstruction = getMovieTypeInstruction();
+            const posterInstruction = getPosterInstruction();
+            const linkInstruction = getLinkInstruction();
+            
+            if (isLoadMore) {
+                const excludedTitles = Array.from(resultsContainer.querySelectorAll('h3')).map(h3 => h3.title).join(', ');
+                return `You are a world-class recommendation expert continuing a previous request. The original request was for ${movieType} content related to: ${context}. Please provide 10 MORE recommendations in the same vein. ${movieTypeInstruction} CRITICAL: You MUST NOT recommend any of the following titles, as they have already been shown: ${excludedTitles}. For each new item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${posterInstruction} ${linkInstruction}`;
+            }
+
+            lastQueryContext = context; // Save context for "Load More"
+            return `You are a world-class recommendation expert. Please recommend 10 ${movieType} movies or web series based on the following context: ${context}. ${movieTypeInstruction} For each item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${posterInstruction} ${linkInstruction}`;
+        }
+
+        async function getAiRecommendationsByMovie() {
+            const movieTitle = movieInput.value.trim();
+            if (!movieTitle) {
+                statusDiv.textContent = "Please enter a title to get recommendations.";
+                return;
+            }
+            const prompt = buildPrompt(`the movie or series "${movieTitle}"`);
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            fetchRecommendations(payload);
+        }
+
+        async function getAiRecommendationsFromImage() {
+            if (!uploadedFile) return;
+            lastQueryContext = "the uploaded poster";
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64ImageData = reader.result.split(',')[1];
+                let prompt = `You are a world-class recommendation expert. First, identify the movie or web series from this poster. Then, recommend 10 other similar ${movieType} items. ${getMovieTypeInstruction()} For each recommended item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${getPosterInstruction()} ${getLinkInstruction()}`;
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: uploadedFile.type, data: base64ImageData } }] }] };
+                fetchRecommendations(payload);
+            };
+            reader.readAsDataURL(uploadedFile);
+        }
+
+        async function getAiRecommendationsByGenre() {
+            const selectedGenres = Array.from(document.querySelectorAll('#genre-options .genre-checkbox:checked')).map(cb => cb.value);
+            if (selectedGenres.length === 0) {
+                statusDiv.textContent = "Please select at least one genre.";
+                return;
+            }
+            const prompt = buildPrompt(`the genres: ${selectedGenres.join(', ')}`);
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            fetchRecommendations(payload);
+        }
+        
+        async function handleLoadMore() {
+            if (!lastQueryContext) return;
+            const prompt = buildPrompt(lastQueryContext, true);
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            fetchRecommendations(payload, true); // Pass 'true' to append results
+        }
+
+        // --- SKELETON LOADER UI ---
+        function showSkeletonLoader(append = false) {
+            statusDiv.textContent = '';
+            if (!append) resultsContainer.innerHTML = '';
+            
+            for (let i = 0; i < 10; i++) {
+                const skeletonCard = `
+                    <div class="skeleton-card animate-pulse">
+                        <div class="skeleton-img"></div>
+                        <div class="p-4 space-y-3">
+                            <div class="skeleton-text w-3/4"></div>
+                            <div class="skeleton-text w-full"></div>
+                            <div class="skeleton-text w-5/6"></div>
+                            <div class="pt-4">
+                                <div class="skeleton-button w-full"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resultsContainer.innerHTML += skeletonCard;
+            }
+        }
+
+        async function fetchRecommendations(payload, append = false) {
+            if (!append) {
+                showSkeletonLoader();
+                loadMoreContainer.classList.add('hidden');
+            } else {
+                loadMoreBtn.textContent = 'Loading...';
+                loadMoreBtn.disabled = true;
+            }
+            
+            recommendBtn.disabled = true;
+            recommendFromPosterBtn.disabled = true;
+            genreRecommendBtn.disabled = true;
+
+            const schema = { 
+                type: "OBJECT",
+                properties: {
+                    "recommendations": {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "title": { "type": "STRING" },
+                                "poster_path": { "type": "STRING" },
+                                "poster_url": { "type": "STRING" },
+                                "imdb_link": { "type": "STRING" },
+                                "tmdb_link": { "type": "STRING" },
+                                "google_link": { "type": "STRING" },
+                                "overview": { "type": "STRING" }
+                            },
+                            required: ["title", "overview"]
+                        }
+                    }
+                },
+                required: ["recommendations"]
+            };
+
+            try {
+                const apiKey = "AIzaSyD7-x3lvSxHApV-Q_G0LaqdRnFCE8NXfqk";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                payload.generationConfig = { responseMimeType: "application/json", responseSchema: schema };
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+                const result = await response.json();
+                
+                if (append) {
+                    const skeletons = resultsContainer.querySelectorAll('.skeleton-card');
+                    skeletons.forEach(sk => sk.remove());
+                }
+
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
+                    const parsedJson = JSON.parse(result.candidates[0].content.parts[0].text);
+                    const recommendations = parsedJson.recommendations;
+                    displayResults(recommendations, append);
+                } else { throw new Error("Received an invalid response from the AI."); }
+            } catch (error) {
+                console.error("Error fetching AI recommendations:", error);
+                if (!append) {
+                    statusDiv.innerHTML = `<span class="text-red-400">Sorry, something went wrong. The AI couldn't provide recommendations. Please try again.</span>`;
+                    resultsContainer.innerHTML = '';
+                } else {
+                    alert("Could not load more results.");
+                }
+            } finally {
+                recommendBtn.disabled = false;
+                if(uploadedFile) recommendFromPosterBtn.disabled = false;
+                genreRecommendBtn.disabled = false;
+                loadMoreBtn.textContent = 'Load More';
+                loadMoreBtn.disabled = false;
+            }
+        }
+
+        function displayResults(movies, append = false) {
+            if (!append) resultsContainer.innerHTML = '';
+            
+            if (!movies || movies.length === 0) {
+                if (!append) resultsContainer.innerHTML = '<p class="col-span-full text-center">The AI could not find any recommendations. Try a different title or poster.</p>';
+                loadMoreContainer.classList.add('hidden');
+                return;
+            }
+
+            movies.forEach((movie, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-inner glass-card rounded-2xl overflow-hidden shadow-lg flex flex-col h-full">
+                        <div class="relative">
+                            <img id="poster-img-${index}" src="" alt="Poster for ${movie.title}" class="poster-img" onerror="this.onerror=null;this.src='https://placehold.co/500x750/1e293b/475569?text=No+Poster';">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+                        </div>
+                        <div class="p-4 flex flex-col flex-grow -mt-16 z-10">
+                            <h3 class="font-bold text-lg text-white" title="${movie.title}">${movie.title}</h3>
+                            <p class="text-slate-300 text-sm h-24 overflow-y-auto mt-2 flex-grow">
+                                ${movie.overview || 'No overview available.'}
+                            </p>
+                            <div class="mt-4 flex items-center justify-center gap-3">${getLinksHtml(movie)}</div>
+                        </div>
+                    </div>
+                `;
+                resultsContainer.appendChild(card);
+                setTimeout(() => card.classList.add('visible'), index * 100);
+
+                // Always fetch poster from backend
+                const imgElem = card.querySelector(`#poster-img-${index}`);
+                fetch(`http://localhost:5000/get-movie-image?title=${encodeURIComponent(movie.title)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.image_url) {
+                            // If the image_url is a proxy endpoint, make sure it uses the full backend URL
+                            let imageUrl = data.image_url;
+                            if (imageUrl.startsWith('/proxy-image')) {
+                                imageUrl = `http://localhost:5000${imageUrl}`;
+                            }
+                            imgElem.src = imageUrl;
+                        }
+                    });
+            });
+
+            loadMoreContainer.classList.remove('hidden');
+        }
+
+        // Helper to generate links HTML
+        function getLinksHtml(movie) {
+            let linksHtml = '';
+            if (movie.imdb_link) {
+                linksHtml += `<a href="${movie.imdb_link}" target="_blank" rel="noopener noreferrer" class="p-2 bg-gray-700/50 rounded-full hover:bg-gray-600 transition-colors" title="IMDb"><img src="image/imdb.png" alt="IMDb" style="width: 24px; height: 24px; display: inline; vertical-align: middle;"/></a>`;
+            }
+            if (movie.tmdb_link) {
+                linksHtml += `<a href="${movie.tmdb_link}" target="_blank" rel="noopener noreferrer" class="p-2 bg-gray-700/50 rounded-full hover:bg-gray-600 transition-colors" title="TMDB"><svg width="24" height="24" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="48" fill="#01B4E4"/><g><text x="50%" y="50%" text-anchor="middle" fill="#FFFFFF" font-family="Arial Black,Arial,sans-serif" font-size="80" font-weight="bold" dy=".35em">TMDB</text></g></svg></a>`;
+            }
+            if (movie.google_link) {
+                linksHtml += `<a href="${movie.google_link}" target="_blank" rel="noopener noreferrer" class="p-2 bg-gray-700/50 rounded-full hover:bg-gray-600 transition-colors" title="Google Search"><img src="image/search.png" alt="Google Search" style="width: 24px; height: 24px; display: inline; vertical-align: middle;"/></a>`;
+            }
+            return linksHtml;
+        }
+
+        // --- EVENT LISTENERS ---
+        typeHollywoodBtn.addEventListener('click', () => setMovieType('Hollywood'));
+        typeBollywoodBtn.addEventListener('click', () => setMovieType('Bollywood'));
+        tabByMovie.addEventListener('click', () => switchToTab('movie'));
+        tabByGenre.addEventListener('click', () => switchToTab('genre'));
+        recommendBtn.addEventListener('click', getAiRecommendationsByMovie);
+        movieInput.addEventListener('keypress', (event) => { if (event.key === 'Enter') getAiRecommendationsByMovie(); });
+        posterUpload.addEventListener('change', handleFileSelect);
+        recommendFromPosterBtn.addEventListener('click', getAiRecommendationsFromImage);
+        genreRecommendBtn.addEventListener('click', getAiRecommendationsByGenre);
+        loadMoreBtn.addEventListener('click', handleLoadMore);
+
+        // --- INITIALIZE APP ---
+        document.addEventListener('DOMContentLoaded', initialize);
+
+    </script>
+</body>
+</html>

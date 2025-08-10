@@ -156,7 +156,12 @@
                             <span id="file-name" class="mt-2">Click to upload an image</span>
                         </label>
                         <input type="file" id="posterUpload" class="hidden" accept="image/*">
-                        <img id="poster-preview" class="mt-4 rounded-lg max-h-64 mx-auto hidden" alt="Poster Preview"/>
+                        <div id="poster-container" class="mt-4 hidden">
+                            <img id="poster-preview" class="rounded-lg max-h-64 mx-auto" alt="Poster Preview"/>
+                            <button id="removePosterBtn" class="mt-2 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-300 text-sm transform hover:scale-105">
+                                Remove Poster
+                            </button>
+                        </div>
                          <button id="recommendFromPosterBtn" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 text-lg flex items-center justify-center mt-4 transform hover:scale-105" disabled>
                             Recommend from Poster
                         </button>
@@ -224,6 +229,9 @@
         const typeBollywoodBtn = document.getElementById('type-bollywood');
         const loadMoreContainer = document.getElementById('load-more-container');
         const loadMoreBtn = document.getElementById('loadMoreBtn');
+        const removePosterBtn = document.getElementById('removePosterBtn');
+        const posterContainer = document.getElementById('poster-container');
+
 
         // --- GLOBAL STATE ---
         let uploadedFile = null;
@@ -268,10 +276,20 @@
             if (file) {
                 uploadedFile = file;
                 fileNameSpan.textContent = file.name;
-                posterPreview.classList.remove('hidden');
                 posterPreview.src = URL.createObjectURL(file);
+                posterContainer.classList.remove('hidden');
                 recommendFromPosterBtn.disabled = false;
             }
+        }
+
+        function removePoster() {
+            uploadedFile = null;
+            fileNameSpan.textContent = 'Click to upload an image';
+            posterPreview.src = '';
+            posterContainer.classList.add('hidden');
+            recommendFromPosterBtn.disabled = true;
+            // Reset the file input
+            posterUpload.value = '';
         }
 
         // --- AI PROMPT ENGINEERING ---
@@ -289,7 +307,7 @@
             if (movieType === 'Bollywood') {
                 return "For each item, you MUST provide a `google_link`, which is a Google search for the movie's title. **Do not provide IMDb or TMDB links for Bollywood content.**";
             }
-            return "For each item, you MUST provide as many of the following links as you can find: `imdb_link`, `tmdb_link`, and `google_link`. The Google link should be a search for the movie's title. It is okay if some links are null, but provide all that you find."
+            return "For each item, you MUST provide as many of the following links as you can find: `imdb_link` and `google_link`. The Google link should be a search for the movie's title. It is okay if some links are null, but provide all that you find."
         }
         
         // --- AI RECOMMENDATION LOGIC ---
@@ -300,11 +318,11 @@
             
             if (isLoadMore) {
                 const excludedTitles = Array.from(resultsContainer.querySelectorAll('h3')).map(h3 => h3.title).join(', ');
-                return `You are a world-class recommendation expert continuing a previous request. The original request was for ${movieType} content related to: ${context}. Please provide 10 MORE recommendations in the same vein. ${movieTypeInstruction} CRITICAL: You MUST NOT recommend any of the following titles, as they have already been shown: ${excludedTitles}. For each new item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${posterInstruction} ${linkInstruction}`;
+                return `You are a world-class recommendation expert continuing a previous request. The original request was for ${movieType} content related to: ${context}. Please provide 10 MORE recommendations in the same vein. ${movieTypeInstruction} CRITICAL: You MUST NOT recommend any of the following titles, as they have already been shown: ${excludedTitles}. For each new item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${posterInstruction} ${linkInstruction} IMPORTANT: Include a mix of recent releases (2023-2024) and new arrivals alongside classic recommendations.`;
             }
 
             lastQueryContext = context; // Save context for "Load More"
-            return `You are a world-class recommendation expert. Please recommend 10 ${movieType} movies or web series based on the following context: ${context}. ${movieTypeInstruction} For each item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${posterInstruction} ${linkInstruction}`;
+            return `You are a world-class recommendation expert. Please recommend 10 ${movieType} movies or web series based on the following context: ${context}. ${movieTypeInstruction} For each item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${posterInstruction} ${linkInstruction} IMPORTANT: Include a mix of recent releases (2023-2024) and new arrivals alongside classic recommendations.`;
         }
 
         async function getAiRecommendationsByMovie() {
@@ -324,7 +342,7 @@
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64ImageData = reader.result.split(',')[1];
-                let prompt = `You are a world-class recommendation expert. First, identify the movie or web series from this poster. Then, recommend 10 other similar ${movieType} items. ${getMovieTypeInstruction()} For each recommended item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${getPosterInstruction()} ${getLinkInstruction()}`;
+                let prompt = `You are a world-class recommendation expert. First, identify the movie or web series from this poster. Then, recommend 10 other similar ${movieType} items. ${getMovieTypeInstruction()} For each recommended item, ensure all its data (title, links, overview, and poster) belong to the same movie. Provide its title, an overview, poster info, and all available links. ${getPosterInstruction()} ${getLinkInstruction()} IMPORTANT: Include a mix of recent releases (2023-2024) and new arrivals alongside classic recommendations.`;
                 const payload = { contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: uploadedFile.type, data: base64ImageData } }] }] };
                 fetchRecommendations(payload);
             };
@@ -397,7 +415,6 @@
                                 "poster_path": { "type": "STRING" },
                                 "poster_url": { "type": "STRING" },
                                 "imdb_link": { "type": "STRING" },
-                                "tmdb_link": { "type": "STRING" },
                                 "google_link": { "type": "STRING" },
                                 "overview": { "type": "STRING" }
                             },
@@ -443,7 +460,7 @@
             }
         }
 
-        function displayResults(movies, append = false) {
+        async function displayResults(movies, append = false) {
             if (!append) resultsContainer.innerHTML = '';
             
             if (!movies || movies.length === 0) {
@@ -452,7 +469,25 @@
                 return;
             }
 
-            movies.forEach((movie, index) => {
+            // Track existing movie titles to avoid duplicates
+            const existingTitles = new Set();
+            if (append) {
+                // Get existing titles from current results
+                const existingCards = resultsContainer.querySelectorAll('h3');
+                existingCards.forEach(card => {
+                    existingTitles.add(card.title || card.textContent);
+                });
+            }
+
+            for (let index = 0; index < movies.length; index++) {
+                const movie = movies[index];
+                
+                // Skip if this movie title already exists
+                if (existingTitles.has(movie.title)) {
+                    continue;
+                }
+                existingTitles.add(movie.title);
+
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.innerHTML = `
@@ -473,22 +508,34 @@
                 resultsContainer.appendChild(card);
                 setTimeout(() => card.classList.add('visible'), index * 100);
 
-                // Always fetch poster from backend
+                // Always fetch poster from OMDb API directly
                 const imgElem = card.querySelector(`#poster-img-${index}`);
-                fetch(`http://localhost:5000/get-movie-image?title=${encodeURIComponent(movie.title)}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.image_url) {
-                            // If the image_url is a proxy endpoint, make sure it uses the full backend URL
-                            let imageUrl = data.image_url;
-                            
-                            if (imageUrl.startsWith('/proxy-image')) {
-                                imageUrl = `http://localhost:5000${imageUrl}`;
-                            }
-                            imgElem.src = imageUrl;
-                        }
-                    });
-            });
+                
+                // Use OMDb API directly without backend
+                const apiKey = '5f43212a';
+                const apiUrl = `https://www.omdbapi.com/?t=${encodeURIComponent(movie.title)}&apikey=${apiKey}`;
+                
+                try {
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+                    
+                    if (data.Response === "True" && data.Poster && data.Poster !== 'N/A') {
+                        imgElem.src = data.Poster;
+                    } else {
+                        // Fallback to placeholder if no poster found
+                        imgElem.src = 'https://placehold.co/500x750/1e293b/475569?text=No+Poster';
+                    }
+                } catch (error) {
+                    console.error('Error fetching poster:', error);
+                    imgElem.src = 'https://placehold.co/500x750/1e293b/475569?text=No+Poster';
+                }
+
+                // Update the links
+                const linksContainer = card.querySelector('.mt-4.flex.items-center.justify-center.gap-3');
+                if (linksContainer) {
+                    linksContainer.innerHTML = getLinksHtml(movie);
+                }
+            }
 
             loadMoreContainer.classList.remove('hidden');
         }
@@ -498,9 +545,6 @@
             let linksHtml = '';
             if (movie.imdb_link) {
                 linksHtml += `<a href="${movie.imdb_link}" target="_blank" rel="noopener noreferrer" class="p-2 bg-gray-700/50 rounded-full hover:bg-gray-600 transition-colors" title="IMDb"><img src="image/imdb.png" alt="IMDb" style="width: 24px; height: 24px; display: inline; vertical-align: middle;"/></a>`;
-            }
-            if (movie.tmdb_link) {
-                linksHtml += `<a href="${movie.tmdb_link}" target="_blank" rel="noopener noreferrer" class="p-2 bg-gray-700/50 rounded-full hover:bg-gray-600 transition-colors" title="TMDB"><svg width="24" height="24" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="256" height="256" rx="48" fill="#01B4E4"/><g><text x="50%" y="50%" text-anchor="middle" fill="#FFFFFF" font-family="Arial Black,Arial,sans-serif" font-size="80" font-weight="bold" dy=".35em">TMDB</text></g></svg></a>`;
             }
             if (movie.google_link) {
                 linksHtml += `<a href="${movie.google_link}" target="_blank" rel="noopener noreferrer" class="p-2 bg-gray-700/50 rounded-full hover:bg-gray-600 transition-colors" title="Google Search"><img src="image/search.png" alt="Google Search" style="width: 24px; height: 24px; display: inline; vertical-align: middle;"/></a>`;
@@ -519,6 +563,7 @@
         recommendFromPosterBtn.addEventListener('click', getAiRecommendationsFromImage);
         genreRecommendBtn.addEventListener('click', getAiRecommendationsByGenre);
         loadMoreBtn.addEventListener('click', handleLoadMore);
+        removePosterBtn.addEventListener('click', removePoster);
 
         // --- INITIALIZE APP ---
         document.addEventListener('DOMContentLoaded', initialize);
